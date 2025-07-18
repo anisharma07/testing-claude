@@ -103,77 +103,34 @@ jobs:
               response_body = json.loads(response.get('body').read())
               return response_body['content'][0]['text']
 
-          def post_organized_comment(organized_content, original_comment_url):
+          def update_original_comment(organized_content, comment_id):
               github_token = os.environ['GITHUB_TOKEN']
               repo = os.environ['GITHUB_REPOSITORY']
-              
-              # Determine if this is an issue or PR comment
-              if 'pull' in original_comment_url:
-                  issue_number = os.environ['GITHUB_REF'].split('/')[-1] if 'GITHUB_REF' in os.environ else None
-                  if not issue_number:
-                      # Extract from the comment URL or event
-                      issue_number = original_comment_url.split('/')[-1].split('#')[0]
-              else:
-                  # For issue comments, we can get the issue number from the event
-                  issue_number = None
-              
-              # Try to get issue/PR number from the GitHub context
-              try:
-                  # Get issue/PR number from GitHub API using the comment ID
-                  headers = {
-                      'Authorization': f'token {github_token}',
-                      'Accept': 'application/vnd.github.v3+json'
-                  }
-                  
-                  comment_id = os.environ['COMMENT_ID']
-                  comment_api_url = f'https://api.github.com/repos/{repo}/issues/comments/{comment_id}'
-                  response = requests.get(comment_api_url, headers=headers)
-                  
-                  if response.status_code == 200:
-                      comment_data = response.json()
-                      issue_url = comment_data['issue_url']
-                      issue_number = issue_url.split('/')[-1]
-                  else:
-                      print(f"Failed to get comment details: {response.status_code}")
-                      return
-                      
-              except Exception as e:
-                  print(f"Error getting issue number: {e}")
-                  return
               
               headers = {
                   'Authorization': f'token {github_token}',
                   'Accept': 'application/vnd.github.v3+json'
               }
               
-              comment_body = f"""## 🤖 Organized by Claude AI
-
-          {organized_content}
-
-          ---
-          *This organized version was generated automatically by Claude AI via Amazon Bedrock*
-
-          [Original comment]({original_comment_url})
-          """
+              # Update the original comment with the organized content only
+              url = f'https://api.github.com/repos/{repo}/issues/comments/{comment_id}'
+              response = requests.patch(url, headers=headers, json={'body': organized_content})
               
-              url = f'https://api.github.com/repos/{repo}/issues/{issue_number}/comments'
-              response = requests.post(url, headers=headers, json={'body': comment_body})
-              
-              if response.status_code == 201:
-                  print("✅ Organized comment posted successfully")
+              if response.status_code == 200:
+                  print("✅ Original comment updated successfully")
               else:
-                  print(f"❌ Failed to post organized comment: {response.status_code}")
+                  print(f"❌ Failed to update comment: {response.status_code}")
                   print(response.text)
 
           def main():
               comment_body = os.environ['COMMENT_BODY']
-              comment_url = os.environ['COMMENT_URL']
+              comment_id = os.environ['COMMENT_ID']
               
               print("🔍 Organizing comment with Claude...")
               organized_content = organize_with_claude(comment_body)
               
-              print("📝 Posting organized comment...")
-              post_organized_comment(organized_content, comment_url)
+              print("📝 Updating original comment...")
+              update_original_comment(organized_content, comment_id)
 
           if __name__ == "__main__":
               main()
